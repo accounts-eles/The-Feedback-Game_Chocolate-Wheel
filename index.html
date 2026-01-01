@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Feedback Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Brand Colors:
+           Midnight Blue: #1f2a52
+           Teal: #00bec7
+           Light Aqua: #d2f0f0
+           Slate Grey: #abb5bf
+        */
+        :root {
+            --brand-midnight: #1f2a52;
+            --brand-teal: #00bec7;
+            --brand-aqua: #d2f0f0;
+            --brand-slate: #abb5bf;
+            --brand-white: #ffffff;
+            --brand-grey-light: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: var(--brand-aqua);
+            color: var(--brand-midnight);
+        }
+
+        canvas {
+            transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .backdrop-blur-sm {
+            backdrop-filter: blur(4px);
+        }
+
+        .btn-primary {
+            background-color: var(--brand-teal);
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--brand-midnight);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background-color: var(--brand-midnight);
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--brand-teal);
+        }
+
+        .card {
+            background-color: white;
+            border: 1px solid var(--brand-aqua);
+            box-shadow: 0 10px 25px -5px rgba(31, 42, 82, 0.1);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen">
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="hidden w-full h-full flex flex-col items-center justify-center p-4 md:p-8">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 uppercase tracking-tight" style="color: var(--brand-midnight);">The Feedback Game</h1>
+        <p id="turn-indicator" class="text-xl md:text-2xl mb-8 font-medium" style="color: var(--brand-slate);">It's someone's turn to spin!</p>
+
+        <div class="flex flex-col md:flex-row items-center justify-center gap-8 w-full max-w-6xl">
+            <!-- Scoreboard -->
+            <div class="w-full md:w-1/3 lg:w-1/4">
+                <div class="card p-6 rounded-2xl">
+                    <h2 class="text-2xl font-bold text-center mb-4 uppercase tracking-wide" style="color: var(--brand-midnight);">Scoreboard</h2>
+                    <div id="scoreboard" class="space-y-3">
+                        <!-- Player scores will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wheel -->
+            <div class="relative flex items-center justify-center w-full md:w-2/3 lg:w-3/4 max-w-[500px] aspect-square">
+                <div class="absolute w-full h-full">
+                    <canvas id="wheelCanvas" width="500" height="500"></canvas>
+                </div>
+                <button id="spin-button" class="absolute z-10 bg-white w-24 h-24 rounded-full text-2xl font-bold shadow-xl border-8 border-white flex items-center justify-center transition-transform duration-200 active:scale-95" style="color: var(--brand-midnight);">SPIN</button>
+                <div class="absolute top-[-15px] left-1/2 -translate-x-1/2" style="width: 0; height: 0; border-left: 20px solid transparent; border-right: 20px solid transparent; border-top: 30px solid var(--brand-teal);"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Modal -->
+    <div id="result-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full text-center border-t-8" style="border-color: var(--brand-teal);">
+            <div id="result-content"></div>
+        </div>
+    </div>
+
+    <!-- Winner Modal -->
+    <div id="winner-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl p-12 max-w-lg w-full text-center transform scale-0 transition-transform duration-500">
+            <h2 class="text-4xl font-bold mb-4 uppercase tracking-tighter" style="color: var(--brand-teal);">Winner!</h2>
+            <p id="winner-name" class="text-3xl mb-8 font-bold" style="color: var(--brand-midnight);"></p>
+            <button id="play-again-button" class="btn-primary font-bold py-3 px-8 rounded-lg text-xl">Play Again</button>
+        </div>
+    </div>
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="fixed inset-0 bg-slate-900 bg-opacity-30 flex items-center justify-center z-30 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md m-4 border-t-8" style="border-color: var(--brand-midnight);">
+            <h1 class="text-3xl font-bold text-center mb-2" style="color: var(--brand-midnight);">Game Setup</h1>
+            <p class="text-center mb-6 font-medium" style="color: var(--brand-slate);">Add at least two players to start.</p>
+            
+            <div class="flex gap-3 mb-4">
+                <input type="text" id="player-name-input" placeholder="e.g., Alex" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2" style="border-color: var(--brand-aqua); --tw-ring-color: var(--brand-teal);">
+                <button id="add-player-button" class="btn-secondary font-semibold px-6 py-2 rounded-lg">Add</button>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-2" style="color: var(--brand-midnight);">Team:</h2>
+                <div id="player-list" class="space-y-2">
+                    <p style="color: var(--brand-slate);">No players yet.</p>
+                </div>
+            </div>
+
+            <button id="start-game-button" class="w-full btn-primary font-bold py-3 rounded-lg text-lg disabled:opacity-50 disabled:cursor-not-allowed">Start Game</button>
+            
+            <div class="mt-8 p-4 rounded-xl" style="background-color: var(--brand-aqua);">
+                 <h2 class="text-sm font-bold mb-2 uppercase tracking-widest" style="color: var(--brand-midnight);">How it works</h2>
+                 <ul class="list-disc list-inside text-sm space-y-1" style="color: var(--brand-midnight);">
+                    <li>Spin the wheel and answer the question.</li>
+                    <li>Teal segments include <span class="font-semibold">Spin Again</span> or <span class="font-semibold">Skip Turn</span>.</li>
+                    <li>Answering a reflection question earns +1 point.</li>
+                    <li>Everyone gets 5 spins; highest score wins.</li>
+                 </ul>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+    const segments = [
+        { label: 'Original Goal', question: 'What was your main objective when you commenced this activity?', type: 'question' },
+        { label: 'Spin Again', type: 'special' },
+        { label: 'Biggest Challenge', question: 'What was the most significant challenge you encountered, and what steps did you take to overcome it?', type: 'question' },
+        { label: 'Skip Your Turn', type: 'special' },
+        { label: 'New Perspective', question: 'Was there a moment or a piece of information that prompted you to view your work from a new perspective?', type: 'question' },
+        { label: 'Do Differently', question: 'In hindsight, what is one thing you would do differently if you were to start this project again?', type: 'question' },
+        { label: 'Future Use', question: 'How can you apply a specific skill or insight from this project to your future work?', type: 'question' },
+        { label: 'Spin Again', type: 'special' },
+        { label: 'Aha! Moment', question: "Can you pinpoint a specific 'aha!' moment where a concept became clear or you made a key connection?", type: 'question' },
+        { label: 'Skip Your Turn', type: 'special' },
+        { label: 'Key Takeaway', question: "What is the key takeaway or most valuable lesson you've learned from this experience?", type: 'question' },
+        { label: 'Next Question?', question: 'What new questions has this activity raised for you, and what are you curious to explore next?', type: 'question' },
+    ];
+
+    // Brand Colors
+    const brandColors = {
+        midnight: '#1f2a52',
+        teal: '#00bec7',
+        aqua: '#d2f0f0',
+        slate: '#abb5bf',
+        white: '#ffffff'
+    };
+    
+    // Wheel Coloring
+    const segmentColors = [brandColors.aqua, brandColors.slate];
+    const specialSegmentColor = brandColors.teal;
+
+    let players = [];
+    let currentPlayerIndex = 0;
+    const spinsPerPlayer = 5;
+
+    const setupScreen = document.getElementById('setup-screen');
+    const gameScreen = document.getElementById('game-screen');
+    const playerNameInput = document.getElementById('player-name-input');
+    const addPlayerButton = document.getElementById('add-player-button');
+    const playerList = document.getElementById('player-list');
+    const startGameButton = document.getElementById('start-game-button');
+    const spinButton = document.getElementById('spin-button');
+    const turnIndicator = document.getElementById('turn-indicator');
+    const scoreboard = document.getElementById('scoreboard');
+    const resultModal = document.getElementById('result-modal');
+    const resultContent = document.getElementById('result-content');
+    const winnerModal = document.getElementById('winner-modal');
+    const winnerName = document.getElementById('winner-name');
+    const playAgainButton = document.getElementById('play-again-button');
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const confettiCtx = confettiCanvas.getContext('2d');
+
+    // --- Game Setup Logic ---
+    function updatePlayerList() {
+        if (players.length === 0) {
+            playerList.innerHTML = '<p style="color: var(--brand-slate);">No players yet.</p>';
+        } else {
+            playerList.innerHTML = players.map((player, index) => `
+                <div class="flex justify-between items-center p-2 rounded-lg" style="background-color: var(--brand-aqua);">
+                    <span class="font-bold" style="color: var(--brand-midnight);">${player.name}</span>
+                    <button class="font-bold text-xl leading-none" style="color: var(--brand-midnight);" onclick="removePlayer(${index})">&times;</button>
+                </div>
+            `).join('');
+        }
+        startGameButton.disabled = players.length < 2;
+    }
+
+    function addPlayer() {
+        const name = playerNameInput.value.trim();
+        if (name && !players.some(p => p.name === name)) {
+            players.push({ name, score: 0, spins: 0, answeredQuestions: [] });
+            playerNameInput.value = '';
+            updatePlayerList();
+        }
+    }
+
+    window.removePlayer = (index) => {
+        players.splice(index, 1);
+        updatePlayerList();
+    };
+    
+    playerNameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addPlayer();
+    });
+    addPlayerButton.addEventListener('click', addPlayer);
+    
+    startGameButton.addEventListener('click', () => {
+        setupScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        startGame();
+    });
+
+    // --- Wheel Drawing Logic ---
+    const drawWheel = () => {
+        const numSegments = segments.length;
+        const anglePerSegment = (2 * Math.PI) / numSegments;
+        const radius = canvas.width / 2;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        segments.forEach((segment, i) => {
+            ctx.beginPath();
+            ctx.moveTo(radius, radius);
+            ctx.arc(radius, radius, radius - 5, i * anglePerSegment, (i + 1) * anglePerSegment);
+            ctx.closePath();
+
+            if (segment.type === 'special') {
+                ctx.fillStyle = specialSegmentColor;
+            } else {
+                ctx.fillStyle = segmentColors[i % segmentColors.length];
+            }
+            ctx.fill();
+
+            // Segment Border
+            ctx.strokeStyle = brandColors.white;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.save();
+            ctx.translate(radius, radius);
+            ctx.rotate(i * anglePerSegment + anglePerSegment / 2);
+            ctx.textAlign = 'center';
+            // Text Color
+            if (segment.type === 'special') {
+                ctx.fillStyle = brandColors.white;
+            } else if (segmentColors[i % segmentColors.length] === brandColors.slate) {
+                ctx.fillStyle = brandColors.white;
+            } else {
+                ctx.fillStyle = brandColors.midnight;
+            }
+            ctx.font = 'bold 15px Inter';
+            ctx.fillText(segment.label, radius * 0.65, 8);
+            ctx.restore();
+        });
+    };
+
+    // --- Game Core Logic ---
+    function startGame() {
+        currentPlayerIndex = 0;
+        updateScoreboard();
+        updateTurnIndicator();
+        spinButton.disabled = false;
+    }
+    
+    function updateScoreboard() {
+        scoreboard.innerHTML = players.map((player, index) => `
+            <div class="p-4 rounded-xl transition-all duration-300 ${index === currentPlayerIndex ? 'ring-4 ring-offset-2' : ''}" 
+                 style="background-color: ${index === currentPlayerIndex ? brandColors.midnight : brandColors.aqua}; 
+                        --tw-ring-color: ${brandColors.teal};">
+                <div class="flex justify-between items-center">
+                    <span class="font-bold text-lg" style="color: ${index === currentPlayerIndex ? brandColors.white : brandColors.midnight};">${player.name}</span>
+                    <span class="font-bold text-xl" style="color: ${index === currentPlayerIndex ? brandColors.teal : brandColors.midnight};">${player.score}</span>
+                </div>
+                <p class="text-xs uppercase font-bold tracking-widest mt-1" style="color: ${index === currentPlayerIndex ? brandColors.teal : brandColors.slate};">Spins: ${player.spins}/${spinsPerPlayer}</p>
+            </div>
+        `).join('');
+    }
+
+    function updateTurnIndicator() {
+        const currentPlayer = players[currentPlayerIndex];
+        turnIndicator.textContent = `It's ${currentPlayer.name}'s turn to spin!`;
+    }
+    
+    function nextTurn() {
+        const currentPlayer = players[currentPlayerIndex];
+        if (currentPlayer.spins >= spinsPerPlayer) {
+             const allFinished = players.every(p => p.spins >= spinsPerPlayer);
+             if (allFinished) {
+                 endGame();
+                 return;
+             }
+        }
+        
+        do {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+        } while (players[currentPlayerIndex].spins >= spinsPerPlayer);
+
+        updateScoreboard();
+        updateTurnIndicator();
+        spinButton.disabled = false;
+    }
+
+    spinButton.addEventListener('click', () => {
+        spinButton.disabled = true;
+        spinWheel();
+    });
+
+    function getAvailableSegment() {
+        const currentPlayer = players[currentPlayerIndex];
+        const availableQuestions = segments.filter((seg, index) => 
+            seg.type === 'question' && !currentPlayer.answeredQuestions.includes(index)
+        );
+      
+        const availableSpecials = segments.filter(seg => seg.type === 'special');
+        
+        let targetPool = [];
+
+        if (availableQuestions.length > 0) {
+            targetPool = [...availableQuestions, ...availableSpecials];
+        } else {
+            targetPool = availableSpecials;
+        }
+
+        const randomIndex = Math.floor(Math.random() * targetPool.length);
+        const chosenSegment = targetPool[randomIndex];
+        const originalIndex = segments.findIndex(s => s === chosenSegment);
+
+        return { ...chosenSegment, index: originalIndex };
+    }
+
+    function spinWheel() {
+        const targetSegment = getAvailableSegment();
+        const numSegments = segments.length;
+        const anglePerSegment = (2 * Math.PI) / numSegments;
+        
+        const pointerAngle = 1.5 * Math.PI;
+        const middleOfSegment = (targetSegment.index * anglePerSegment) + (anglePerSegment / 2);
+        const randomSpins = Math.floor(Math.random() * 3 + 4); 
+        const rotation = (randomSpins * 2 * Math.PI) + pointerAngle - middleOfSegment;
+
+        canvas.style.transform = `rotate(${rotation}rad)`;
+        canvas.addEventListener('transitionend', () => onSpinEnd(targetSegment), { once: true });
+    }
+    
+    function onSpinEnd(segment) {
+        const currentPlayer = players[currentPlayerIndex];
+        currentPlayer.spins++;
+        
+        let modalHTML = '';
+
+        if (segment.type === 'question') {
+            currentPlayer.answeredQuestions.push(segment.index);
+            modalHTML = `
+                <div class="flex items-center justify-center w-16 h-16 rounded-full mx-auto mb-4" style="background-color: var(--brand-midnight)">
+                    <span class="text-white text-4xl font-bold">?</span>
+                </div>
+                <h2 class="text-2xl font-bold mb-4 uppercase tracking-tighter" style="color: var(--brand-midnight);">${segment.label}</h2>
+                <p class="text-lg mb-6 leading-relaxed" style="color: var(--brand-midnight);">${segment.question}</p>
+                <button onclick="handleAnswered()" class="btn-primary font-bold py-3 px-8 rounded-lg text-lg">Answered (+1 Point)</button>
+            `;
+        } else { // Special
+            modalHTML = `
+                 <h2 class="text-3xl font-bold mb-6" style="color: var(--brand-midnight);">${segment.label}</h2>
+                 <p class="mb-6 font-medium" style="color: var(--brand-slate);">Better luck next time!</p>
+                 <button onclick="closeModal(false)" class="btn-secondary font-bold py-3 px-8 rounded-lg text-lg">Continue</button>
+            `;
+            if (segment.label === 'Spin Again') {
+                 currentPlayer.spins--;
+            }
+        }
+        
+        resultContent.innerHTML = modalHTML;
+        resultModal.classList.remove('hidden');
+
+        window.handleAnswered = () => {
+             players[currentPlayerIndex].score++;
+             closeModal(true);
+        }
+
+        window.closeModal = (turnOver) => {
+            resultModal.classList.add('hidden');
+            if (segment.label === 'Spin Again') {
+                spinButton.disabled = false;
+                 updateScoreboard();
+                 updateTurnIndicator();
+            } else {
+                 nextTurn();
+            }
+        }
+    }
+
+    function endGame() {
+        spinButton.disabled = true;
+        turnIndicator.textContent = "Game Over!";
+        
+        const maxScore = Math.max(...players.map(p => p.score));
+        const winners = players.filter(p => p.score === maxScore);
+        
+        if (winners.length === 1) {
+            winnerName.textContent = `${winners[0].name} wins!`;
+        } else {
+            winnerName.textContent = "It's a tie!";
+        }
+        
+        winnerModal.classList.remove('hidden');
+        setTimeout(() => {
+            winnerModal.querySelector('div').classList.add('scale-100');
+            launchConfetti();
+        }, 100);
+    }
+    
+    playAgainButton.addEventListener('click', () => {
+        players.forEach(p => {
+            p.score = 0;
+            p.spins = 0;
+            p.answeredQuestions = [];
+        });
+        winnerModal.classList.add('hidden');
+        winnerModal.querySelector('div').classList.remove('scale-100');
+        
+        canvas.style.transition = 'none';
+        canvas.style.transform = 'rotate(0rad)';
+        setTimeout(() => {
+             canvas.style.transition = 'transform 4s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        }, 50);
+
+        startGame();
+    });
+
+    // --- Confetti Logic ---
+    let confetti = [];
+    const confettiCount = 150;
+    const gravity = 0.5;
+    const terminalVelocity = 5;
+    const drag = 0.075;
+    const confColors = [brandColors.teal, brandColors.midnight, brandColors.slate];
+
+    function resizeCanvas() {
+        confettiCanvas.width = window.innerWidth;
+        confettiCanvas.height = window.innerHeight;
+    }
+
+    function launchConfetti() {
+        resizeCanvas();
+        confetti = [];
+        for (let i = 0; i < confettiCount; i++) {
+            confetti.push({
+                x: confettiCanvas.width / 2,
+                y: confettiCanvas.height / 2,
+                r: Math.random() * 5 + 4,
+                d: Math.random() * confettiCount,
+                color: confColors[Math.floor(Math.random() * confColors.length)],
+                tilt: Math.floor(Math.random() * 10) - 10,
+                tiltAngleIncrement: Math.random() * 0.07 + 0.05,
+                tiltAngle: 0,
+                angle: Math.random() * 2 * Math.PI,
+                vx: Math.random() * 6 - 3,
+                vy: Math.random() * -15 - 5,
+            });
+        }
+        updateConfetti();
+    }
+
+    function updateConfetti() {
+        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        
+        confetti.forEach((c, i) => {
+            c.vy += gravity;
+            c.vx *= (1-drag);
+            c.x += c.vx;
+            c.y += c.vy;
+            c.tiltAngle += c.tiltAngleIncrement;
+            
+            confettiCtx.beginPath();
+            confettiCtx.lineWidth = c.r / 2;
+            confettiCtx.strokeStyle = c.color;
+            confettiCtx.moveTo(c.x + c.tilt + c.r, c.y);
+            confettiCtx.lineTo(c.x + c.tilt, c.y + c.tilt + c.r);
+            confettiCtx.stroke();
+            
+            if (c.y > confettiCanvas.height) {
+                confetti.splice(i, 1);
+            }
+        });
+        
+        if (confetti.length > 0) {
+            requestAnimationFrame(updateConfetti);
+        } else {
+             confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        }
+    }
+
+    window.onload = () => {
+        updatePlayerList();
+        drawWheel();
+        window.addEventListener('resize', resizeCanvas);
+    };
+
+</script>
+</body>
+</html>
